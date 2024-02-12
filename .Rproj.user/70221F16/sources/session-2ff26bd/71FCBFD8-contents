@@ -1,0 +1,151 @@
+#Loading the libraries
+library(openair)
+library(dplyr)
+library(openairmaps)
+library(latex2exp)
+library(worldmet)
+
+# worldmet provides an easy way in which to access 
+# surface meteorological data from >30,000 sites across the world
+# The package accesses the NOAA webservers to download hourly data. 
+# See https://github.com/davidcarslaw/worldmet and 
+# https://www.ncdc.noaa.gov/isd for further information.
+
+getMeta(lat = 32.77, lon = -96.800, returnMap = TRUE)#Sites close to Dallas down town
+
+getMeta()#gives a list of all sites in the world with 
+#the code => similar to the location id, then the start date and end date
+addison_meta <- importNOAA(code = "722598-03970", year = 2022)
+windRose(addison_meta,par.settings=list(fontsize=list(text=8)))
+
+#Yearly data
+addison_meta <- importNOAA(code = "722598-03970",year = 2014:2023)
+windRose(addison_meta, type = "year",
+         par.settings=list(fontsize=list(text=7.5)))
+
+
+
+#Applying the plots on the variogram data
+
+#Loaded the Variogram data(it contains the time scale, wind speed, wind direction and the temp,press, humidity)
+wind_data = read.csv("D:\\UTD\\UTDFall2022\\VariogramsLoRa\\firmware\\data\\Parameters\\csv\\Wind_TPH_Range.csv")
+#wind_data = subset(wind_data,date == '2023-01-03')
+
+#Creating an array with all the time scales
+pm_range = c(wind_data$pm0.1,wind_data$pm0.3,wind_data$pm0.5,
+             wind_data$pm1.0,wind_data$pm2.5,wind_data$pm5.0,
+             wind_data$pm10.0)
+pm_range = na.omit(pm_range)
+
+
+#Specifying the upper limit and lower limit on the color bar using the pm_range aka all the time scales
+lim = quantile(pm_range, c(0.05,.95))
+#lim = c(min(pm_range),max(pm_range))
+
+# For simplicity, I am copying the data into the variable specified in the package, 
+# in order to avoid errors, because the data is in tibble format.
+# We can create our own tibble, but make sure all the columns in the tibble are
+# following the same data type as mentioned in the example:
+
+#as.POSIXct(wind_data$RollingTime,format="%Y-%m-%dT%H:%M")
+#Added the title
+title = "2023-01-03"
+
+mydata_sample = mydata[c(1:nrow(wind_data)),]# sub-setting the mydata(the variable specified in the package) variable 
+#Copied all the data from the wind_data variable to mydata_sample
+mydata_sample$date = as.POSIXct(wind_data$RollingTime,format="%Y-%m-%dT%H:%M")
+mydata_sample$pm2.5 = round(wind_data$pm2.5,digits = 2)
+mydata_sample$ws = wind_data$MeanWindSpeed
+mydata_sample$wd = wind_data$MeanWindDirection
+mydata_sample$lat = c(32.715)
+mydata_sample$lon = c(-96.748)
+mydata_sample$Temperature = wind_data$MeanTemperature
+mydata_sample$Pressure = wind_data$MeanPressure
+mydata_sample$Humidity = wind_data$MeanHumidity
+
+#Removed the unwanted variables from the tibble
+mydata_sample = subset(mydata_sample, select = -c(so2,no2,o3,nox,pm10,co,pm25))
+
+#Created the color code, as the default color code was the reverse of this
+#We can use Rs colorbrewer package to figure the hex code for the color bars
+
+rev_default_col = c("#9E0142","#FA8C4E","#FFFFBF","#88D1A4","#5E4FA2")
+#Pollution Rose showing the variation in time scale for PM2.5
+pollutionRose(mydata_sample, pollutant = "pm2.5",main = title,cols = rev_default_col,key.position = "right",
+              key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),  key.footer =NULL,
+              limits = c(lim[1],lim[2]),par.settings=list(fontsize=list(text=10)))
+
+
+
+pollutionRose(mydata_sample,
+              pollutant = "pm2.5",
+              type = "Temperature",
+              layout = c(2, 2),key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),
+              key.position = "right",par.settings=list(fontsize=list(text=7.5)))
+
+pollutionRose(mydata_sample,
+              pollutant = "pm2.5",
+              type = "Pressure",
+              layout = c(2, 2),key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),
+              key.position = "right",par.settings=list(fontsize=list(text=7.5)))
+
+
+pollutionRose(mydata_sample,
+              pollutant = "pm2.5",
+              type = "Humidity",
+              layout = c(2, 2),key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),
+              key.position = "right",par.settings=list(fontsize=list(text=7.5)))
+
+
+pollutionRose(mydata_sample, pollutant = "pm2.5", statistic = "prop.mean")
+
+pollutionRose(mydata_sample, pollutant = "pm2.5", seg = 1,
+              key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'))
+
+pollutionRose(mydata_sample,
+              pollutant = "pm2.5",
+              normalise = TRUE,
+              seg = 1,key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),
+              cols = "heat")
+
+
+
+
+#Created the polar plot for wind speed vs wind direction vs time scale
+polarPlot(mydata_sample,pollutant = "pm2.5",main = title,k =30,cols = rev_default_col,key.position = "bottom",
+          key.header = TeX('$\\PM_2._5\\ Range(Minutes)$'),  key.footer =NULL,
+          limits = c(lim[1],lim[2]),par.settings=list(fontsize=list(text=10)))
+
+
+
+
+## example of comparing 2 met sites
+## first we will make some new ws/wd data with a postive bias
+# mydata_sample <- mutate(mydata_sample,
+#                  ws2 = ws + 2 * rnorm(nrow(mydata_sample)) + 1,
+#                  wd2 = wd + 30 * rnorm(nrow(mydata_sample)) + 30
+# )
+# 
+# ## need to correct negative wd
+# id <- which(mydata_sample$wd2 < 0)
+# mydata_sample$wd2[id] <- mydata_sample$wd2[id] + 360
+# 
+# ## results show postive bias in wd and ws
+# pollutionRose(mydata_sample,
+#               ws = "ws",
+#               wd = "wd",
+#               ws2 = "ws2",
+#               wd2 = "wd2"
+# )
+#Created the polar plot for wind speed vs wind direction vs time scale
+polarPlot(mydata_sample,pollutant = "pm2.5",main = title,k =30,cols = rev_default_col,key.position = "right",
+          key.header =  TeX('$\\PM_2._5\\ Range(Minutes)$'),  
+          key.footer =NULL,statistic = "nwr",
+          limits = c(lim[1],lim[2]),par.settings=list(fontsize=list(text=10)))
+
+
+
+############## Polar Frequencies ####################
+
+polarFreq(mydata_sample)
+
